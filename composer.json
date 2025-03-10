@@ -1,0 +1,24 @@
+{
+    "name": "pushbrief/pre-commit-summarize",
+    "type": "package",
+    "require": {
+        "symfony/console": "^7.2",
+        "symfony/process": "^7.2"
+    },
+    "license": "MIT",
+    "autoload": {
+        "psr-4": {
+            "Pushbrief\\PreCommitSummarize\\": "src/"
+        }
+    },
+    "bin": [
+        "bin/pre-commit-summarize"
+    ],
+    "authors": [
+        {
+            "name": "Ahmet",
+            "email": "ahmetbarut588@gmail.com"
+        }
+    ],
+    "minimum-stability": "stable"
+}

@@ -1,0 +1,11 @@
+#!/usr/bin/env php
+<?php
+
+require __DIR__ . '/../vendor/autoload.php';
+
+use Pushbrief\PreCommitSummarize\Command\GitInfoCommand;
+use Symfony\Component\Console\Application;
+
+$application = new Application('Pre-Commit Summarize', '1.0.0');
+$application->add(new GitInfoCommand());
+$application->run();
