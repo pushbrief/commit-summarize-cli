@@ -4,8 +4,10 @@
 require __DIR__ . '/../vendor/autoload.php';
 
 use Pushbrief\PreCommitSummarize\Command\GitInfoCommand;
+use Pushbrief\PreCommitSummarize\Command\GitApiCommand;
 use Symfony\Component\Console\Application;
 
-$application = new Application('Pre-Commit Summarize', '1.0.0');
+$application = new Application('Commit Summarize', '1.0.0');
 $application->add(new GitInfoCommand());
+$application->add(new GitApiCommand());
 $application->run();

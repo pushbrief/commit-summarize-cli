@@ -171,11 +171,169 @@ class GitInfo
      * Get the diff for a specific file
      *
      * @param string $file The file path
+     * @param bool $staged Whether to get the staged diff
      * @return string The diff output
      */
-    public function getDiff(string $file): string
+    public function getDiff(string $file, bool $staged = false): string
     {
-        return $this->executeGitCommand(['diff', $file]);
+        try {
+            $command = ['diff'];
+            if ($staged) {
+                $command[] = '--staged';
+            }
+            // Add -- to separate paths from revisions
+            $command[] = '--';
+            $command[] = $file;
+            
+            return $this->executeGitCommand($command);
+        } catch (\Exception $e) {
+            // Return empty string if there's an error getting the diff
+            return '';
+        }
+    }
+    
+    /**
+     * Get diffs for all changed files
+     *
+     * @param bool $staged Whether to get the staged diffs
+     * @return array Array of file diffs with file name and patch content
+     */
+    public function getDiffs(bool $staged = false): array
+    {
+        try {
+            $changedFiles = $this->getChangedFiles();
+            $diffs = [];
+            
+            // If there are no changed files, try to get a unified diff
+            if (empty($changedFiles)) {
+                return [];
+            }
+            
+            // First try to get a unified diff for all files
+            $unifiedDiff = $this->getUnifiedDiff($staged);
+            if (!empty($unifiedDiff)) {
+                // Parse the unified diff to extract per-file diffs
+                $fileDiffs = $this->parseUnifiedDiff($unifiedDiff);
+                if (!empty($fileDiffs)) {
+                    return $fileDiffs;
+                }
+            }
+            
+            // If unified diff approach didn't work, fall back to per-file diffs
+            foreach ($changedFiles as $file) {
+                // Skip untracked files if we're looking at staged changes
+                if ($staged && $file['status_code'] === '??') {
+                    continue;
+                }
+                
+                // Get the diff for this file
+                $diffContent = $this->getDiff($file['file'], $staged);
+                
+                // If there's no diff content for staged files, skip
+                if ($staged && empty($diffContent)) {
+                    continue;
+                }
+                
+                // If there's no diff content for untracked files, create a simple diff
+                if (empty($diffContent) && $file['status_code'] === '??') {
+                    $diffContent = "New file: {$file['file']}\n";
+                }
+                
+                if (!empty($diffContent)) {
+                    $diffs[] = [
+                        'file' => $file['file'],
+                        'status' => $file['status'],
+                        'patch' => $diffContent
+                    ];
+                }
+            }
+            
+            return $diffs;
+        } catch (\Exception $e) {
+            // Return empty array if there's an error getting the diffs
+            return [];
+        }
+    }
+    
+    /**
+     * Parse a unified diff to extract per-file diffs
+     *
+     * @param string $unifiedDiff The unified diff output
+     * @return array Array of file diffs with file name and patch content
+     */
+    private function parseUnifiedDiff(string $unifiedDiff): array
+    {
+        if (empty($unifiedDiff)) {
+            return [];
+        }
+        
+        $fileDiffs = [];
+        $lines = explode("\n", $unifiedDiff);
+        $currentFile = null;
+        $currentPatch = [];
+        $diffStarted = false;
+        
+        foreach ($lines as $line) {
+            // Check for diff header (diff --git a/file b/file)
+            if (preg_match('/^diff --git a\/(.+) b\/(.+)$/', $line, $matches)) {
+                // If we already have a file, add it to the results
+                if ($currentFile && !empty($currentPatch)) {
+                    $fileDiffs[] = [
+                        'file' => $currentFile,
+                        'status' => 'Modified', // Default status
+                        'patch' => implode("\n", $currentPatch)
+                    ];
+                }
+                
+                // Start a new file
+                $currentFile = $matches[1];
+                $currentPatch = [$line];
+                $diffStarted = true;
+                continue;
+            }
+            
+            if ($diffStarted) {
+                $currentPatch[] = $line;
+            }
+        }
+        
+        // Add the last file if there is one
+        if ($currentFile && !empty($currentPatch)) {
+            $fileDiffs[] = [
+                'file' => $currentFile,
+                'status' => 'Modified', // Default status
+                'patch' => implode("\n", $currentPatch)
+            ];
+        }
+        
+        return $fileDiffs;
+    }
+    
+    /**
+     * Get a unified diff of all changes
+     * 
+     * @param bool $staged Whether to get the staged diff
+     * @return string The unified diff output
+     */
+    public function getUnifiedDiff(bool $staged = false): string
+    {
+        try {
+            $command = ['diff'];
+            if ($staged) {
+                $command[] = '--staged';
+            }
+            
+            // Add color option for better parsing
+            $command[] = '--color=never';
+            
+            // Add -- to separate paths from revisions
+            $command[] = '--';
+            
+            return $this->executeGitCommand($command);
+        } catch (\Exception $e) {
+            // Return empty string if there's an error getting the unified diff
+            return '';
+        }
     }
 
     /**
@@ -209,5 +367,42 @@ class GitInfo
             'contributors' => $contributorsList,
             'current_branch' => $this->getCurrentBranch()
         ];
+    }
+    
+    /**
+     * Get changes in API format
+     * 
+     * @param bool $staged Whether to get staged changes
+     * @param bool $includeDiffs Whether to include diffs in the response
+     * @return array Array of changes in API format
+     */
+    public function getChangesApi(bool $staged = false, bool $includeDiffs = true): array
+    {
+        $changedFiles = $this->getChangedFiles();
+        $result = [];
+        
+        foreach ($changedFiles as $file) {
+            // Skip untracked files if we're looking at staged changes
+            if ($staged && $file['status_code'] === '??') {
+                continue;
+            }
+            
+            $item = [
+                'file' => $file['file'],
+                'status' => $file['status'],
+                'status_code' => $file['status_code']
+            ];
+            
+            // Include diffs if requested
+            if ($includeDiffs) {
+                $item['patch'] = $this->getDiff($file['file'], $staged);
+            } else {
+                $item['patch'] = '';
+            }
+            
+            $result[] = $item;
+        }
+        
+        return $result;
     }
 }
