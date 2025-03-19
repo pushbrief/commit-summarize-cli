@@ -3,11 +3,22 @@
 
 require __DIR__ . '/../vendor/autoload.php';
 
+// Load environment variables from .env file if it exists
+$dotenvFile = __DIR__ . '/../.env';
+if (file_exists($dotenvFile)) {
+    $dotenv = Dotenv\Dotenv::createImmutable(dirname($dotenvFile));
+    $dotenv->load();
+}
+
 use Pushbrief\PreCommitSummarize\Command\GitInfoCommand;
 use Pushbrief\PreCommitSummarize\Command\GitApiCommand;
+use Pushbrief\PreCommitSummarize\Command\JiraCommitCommand;
+use Pushbrief\PreCommitSummarize\Command\JiraAnalyzeCommand;
 use Symfony\Component\Console\Application;
 
 $application = new Application('Commit Summarize', '1.0.0');
 $application->add(new GitInfoCommand());
 $application->add(new GitApiCommand());
+$application->add(new JiraCommitCommand());
+$application->add(new JiraAnalyzeCommand());
 $application->run();
